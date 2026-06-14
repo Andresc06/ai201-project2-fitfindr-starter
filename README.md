@@ -110,6 +110,18 @@ These are stored in `session["parsed"]`.
 
 The agent only reaches `suggest_outfit` if `search_listings` returned at least one result. If no listings match, the agent stops, sets a helpful error message, and returns without wasting LLM calls. The two LLM tools only run when there is a real item to work with.
 
+### Retry logic with fallback
+
+Before giving up on an empty result, the agent automatically retries with loosened constraints:
+
+1. **Retry 1 — drop size filter:** If a size was specified and results are empty, retry without it. If this produces results, `session["retry_note"]` is set to `"No results for size M, so I searched all sizes instead."` The listing panel in the UI shows this note so the user knows what was adjusted.
+
+2. **Retry 2 — drop price filter:** If results are still empty and a price ceiling was specified, retry without it. The retry note is updated to include the price limit that was removed.
+
+3. **Final failure:** If results are still empty after both retries, `session["error"]` is set and the loop exits without calling any LLM tools.
+
+Example: query `"vintage graphic tee size XXS under $5"` → no exact match → retry without size XXS → retry without $5 limit → finds results → `retry_note` shown in UI.
+
 ---
 
 ## State Management

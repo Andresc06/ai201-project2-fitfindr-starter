@@ -43,6 +43,7 @@ def _new_session(query: str, wardrobe: dict) -> dict:
         "wardrobe": wardrobe,        # user's wardrobe dict
         "outfit_suggestion": None,   # string returned by suggest_outfit
         "fit_card": None,            # string returned by create_fit_card
+        "retry_note": None,          # set if search was retried with looser constraints
         "error": None,               # set if the interaction ended early
     }
 
@@ -91,20 +92,34 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         "max_price": float(price_match.group(1)) if price_match else None,
     }
 
-    # Step 3: call search_listings — branch on empty results
-    session["search_results"] = search_listings(
-        session["parsed"]["description"],
-        session["parsed"]["size"],
-        session["parsed"]["max_price"],
-    )
+    # Step 3: call search_listings with retry-with-fallback
+    desc = session["parsed"]["description"]
+    size = session["parsed"]["size"]
+    max_price = session["parsed"]["max_price"]
+    retry_note = None
+
+    session["search_results"] = search_listings(desc, size, max_price)
+
+    # Retry 1: drop size filter
+    if not session["search_results"] and size is not None:
+        session["search_results"] = search_listings(desc, None, max_price)
+        if session["search_results"]:
+            retry_note = f"No results for size {size}, so I searched all sizes instead."
+            size = None
+
+    # Retry 2: drop price filter
+    if not session["search_results"] and max_price is not None:
+        session["search_results"] = search_listings(desc, size, None)
+        if session["search_results"]:
+            note = f"price limit removed (was ${max_price:.2f})"
+            retry_note = (retry_note + f" Also {note}." if retry_note else f"No results under ${max_price:.2f}, so I {note}.")
+
+    session["retry_note"] = retry_note
 
     if not session["search_results"]:
-        desc = session["parsed"]["description"]
-        size = session["parsed"]["size"] or "any size"
-        price = f"${session['parsed']['max_price']:.2f}" if session["parsed"]["max_price"] else "any price"
         session["error"] = (
-            f"No listings found matching '{desc}' in size {size} under {price}. "
-            f"Try broadening your search — for example, remove the size filter or raise your price limit."
+            f"No listings found matching '{desc}' even after broadening the search. "
+            f"Try different keywords."
         )
         return session
 

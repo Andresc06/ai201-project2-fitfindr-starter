@@ -54,7 +54,9 @@ def handle_query(user_query: str, wardrobe_choice: str) -> tuple[str, str, str]:
     # Step 5: format the selected listing and return all three panels
     item = session["selected_item"]
     brand_line = f"Brand: {item['brand']}\n" if item.get("brand") else ""
+    retry_line = f"⚠️ {session['retry_note']}\n\n" if session.get("retry_note") else ""
     listing_text = (
+        f"{retry_line}"
         f"{item['title']}\n"
         f"Price: ${item['price']:.2f} on {item['platform']}\n"
         f"Size: {item['size']}  |  Condition: {item['condition']}\n"
